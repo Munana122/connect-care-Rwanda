@@ -6,10 +6,10 @@ const patientUtils = require('./utils/patient');
 const doctorUtils = require('./utils/doctor');
 const consultationUtils = require('./utils/consultation');
 const paymentUtils = require('./utils/payment');
-const pool = require('./utils/db');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+const pool = require('./utils/db');
 
 app.use(cors());
 app.use(express.json());
@@ -441,97 +441,99 @@ app.delete('/payments/:id', auth.requireAuth, async (req, res) => {
   }
 });
 
-// Setup database through API endpoint
+// Route to setup db
 app.get('/setup-db', async (req, res) => {
   try {
     
     const setupSQL = `
-      -- Users table for authentication
-      CREATE TABLE IF NOT EXISTS users (
-        id INT PRIMARY KEY AUTO_INCREMENT,
-        full_name VARCHAR(200) NOT NULL,
-        email VARCHAR(255) UNIQUE,
-        phone VARCHAR(20) UNIQUE,
-        password_hash VARCHAR(255) NOT NULL,
-        user_type ENUM('patient', 'doctor') DEFAULT 'patient',
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      );
+        -- Users table for authentication
+        CREATE TABLE IF NOT EXISTS users (
+          id INT PRIMARY KEY AUTO_INCREMENT,
+          full_name VARCHAR(200) NOT NULL,
+          email VARCHAR(255) UNIQUE,
+          phone VARCHAR(20) UNIQUE,
+          password_hash VARCHAR(255) NOT NULL,
+          user_type ENUM('patient', 'doctor') DEFAULT 'patient',
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
 
-      -- Patients table
-      CREATE TABLE IF NOT EXISTS patients (
-        id INT PRIMARY KEY AUTO_INCREMENT,
-        full_name VARCHAR(200) NOT NULL,
-        date_of_birth DATE NOT NULL,
-        gender VARCHAR(15) NOT NULL,
-        contact_info VARCHAR(200),
-        address TEXT,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      );
+        -- Patients table
+        CREATE TABLE IF NOT EXISTS patients (
+          id INT PRIMARY KEY AUTO_INCREMENT,
+          full_name VARCHAR(200) NOT NULL,
+          date_of_birth DATE NOT NULL,
+          gender VARCHAR(15) NOT NULL,
+          contact_info VARCHAR(200),
+          address TEXT,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
 
-      -- Doctors table
-      CREATE TABLE IF NOT EXISTS doctors (
-        id INT PRIMARY KEY AUTO_INCREMENT,
-        full_name VARCHAR(100) NOT NULL,
-        specialty VARCHAR(50) NOT NULL,
-        license_number VARCHAR(50) UNIQUE NOT NULL,
-        contact_info VARCHAR(100),
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      );
+        -- Doctors table
+        CREATE TABLE IF NOT EXISTS doctors (
+          id INT PRIMARY KEY AUTO_INCREMENT,
+          full_name VARCHAR(100) NOT NULL,
+          specialty VARCHAR(50) NOT NULL,
+          license_number VARCHAR(50) UNIQUE NOT NULL,
+          contact_info VARCHAR(100),
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
 
-      -- Consultations table
-      CREATE TABLE IF NOT EXISTS consultations (
-        id INT PRIMARY KEY AUTO_INCREMENT,
-        patient_id INT NOT NULL,
-        doctor_id INT NOT NULL,
-        consultation_date DATE NOT NULL,
-        notes TEXT,
-        diagnosis TEXT,
-        prescription TEXT,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (patient_id) REFERENCES patients(id) ON DELETE CASCADE,
-        FOREIGN KEY (doctor_id) REFERENCES doctors(id) ON DELETE CASCADE
-      );
+        -- Consultations table WITH STATUS COLUMN
+        CREATE TABLE IF NOT EXISTS consultations (
+          id INT PRIMARY KEY AUTO_INCREMENT,
+          patient_id INT NOT NULL,
+          doctor_id INT NOT NULL,
+          consultation_date DATE NOT NULL,
+          notes TEXT,
+          diagnosis TEXT,
+          prescription TEXT,
+          status ENUM('pending', 'completed', 'cancelled') DEFAULT 'pending',
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (patient_id) REFERENCES patients(id) ON DELETE CASCADE,
+          FOREIGN KEY (doctor_id) REFERENCES doctors(id) ON DELETE CASCADE
+        );
 
-      -- Payments table
-      CREATE TABLE IF NOT EXISTS Payments (
-        id INT PRIMARY KEY AUTO_INCREMENT,
-        patient_id INT NOT NULL,
-        consultation_id INT,
-        payment_date DATE NOT NULL,
-        amount DECIMAL(10,2) NOT NULL,
-        payment_method VARCHAR(50) NOT NULL,
-        receipt_number VARCHAR(100),
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (patient_id) REFERENCES patients(id) ON DELETE CASCADE,
-        FOREIGN KEY (consultation_id) REFERENCES consultations(id) ON DELETE SET NULL
-      );
-    `;
+        -- Payments table
+        CREATE TABLE IF NOT EXISTS Payments (
+          id INT PRIMARY KEY AUTO_INCREMENT,
+          patient_id INT NOT NULL,
+          consultation_id INT,
+          payment_date DATE NOT NULL,
+          amount DECIMAL(10,2) NOT NULL,
+          payment_method VARCHAR(50) NOT NULL,
+          receipt_number VARCHAR(100),
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (patient_id) REFERENCES patients(id) ON DELETE CASCADE,
+          FOREIGN KEY (consultation_id) REFERENCES consultations(id) ON DELETE SET NULL
+        );
+      `;
 
     const sampleDataSQL = `
-      -- Add sample patients
-      INSERT IGNORE INTO patients (full_name, date_of_birth, gender, contact_info, address) VALUES
-      ('Admire chaga', '1985-03-15', 'Male', 'admire@email.com', '123 Main St'),
-      ('Merveille Munana', '1965-07-22', 'Female', 'mmunana@email.com', '456 st '),
-      ('David Kayumba', '1998-11-03', 'Male', 'davk@email.com', '7Rd');
+        -- Add sample doctors (ENSURE ID 1 EXISTS)
+        INSERT IGNORE INTO doctors (id, full_name, specialty, license_number, contact_info) VALUES
+        (1, 'Dr. Default', 'General Practice', 'MD000', 'default@hospital.com'),
+        (2, 'Dr. Ngarambe', 'Cardiology', 'MD001', 'dr.Ngarambe@hospital.com'),
+        (3, 'Dr. Steven', 'General Practice', 'MD002', 'dr.Steven@hospital.com'),
+        (4, 'Dr. Kalisa', 'Pediatrics', 'MD003', 'dr.Kalisa@hospital.com');
 
-      -- Add sample doctors
-      INSERT IGNORE INTO doctors (full_name, specialty, license_number, contact_info) VALUES
-      ('Dr. Ngarambe', 'Cardiology', 'MD001', 'dr.Ngarambe@hospital.com'),
-      ('Dr. Steven', 'General Practice', 'MD002', 'dr.Steven@hospital.com'),
-      ('Dr. Kalisa', 'Pediatrics', 'MD003', 'dr.Kalisa@hospital.com');
+        -- Add sample patients
+        INSERT IGNORE INTO patients (full_name, date_of_birth, gender, contact_info, address) VALUES
+        ('Admire chaga', '1985-03-15', 'Male', 'admire@email.com', '123 Main St'),
+        ('Merveille Munana', '1965-07-22', 'Female', 'mmunana@email.com', '456 st '),
+        ('David Kayumba', '1998-11-03', 'Male', 'davk@email.com', '7Rd');
 
-      -- Add sample consultations
-      INSERT IGNORE INTO consultations (patient_id, doctor_id, consultation_date, notes, diagnosis) VALUES
-      (1, 1, '2024-07-20', 'Patient complained of chest pain', 'Mild angina'),
-      (2, 2, '2024-07-21', 'Regular checkup', 'Healthy'),
-      (3, 3, '2024-07-22', 'Child vaccination', 'Vaccination completed');
+        -- Add sample consultations WITH STATUS
+        INSERT IGNORE INTO consultations (patient_id, doctor_id, consultation_date, notes, diagnosis, status) VALUES
+        (1, 1, '2024-07-20', 'Patient complained of chest pain', 'Mild angina', 'completed'),
+        (2, 2, '2024-07-21', 'Regular checkup', 'Healthy', 'completed'),
+        (3, 3, '2024-07-22', 'Child vaccination', 'Vaccination completed', 'completed');
 
-      -- Add sample payments
-      INSERT IGNORE INTO Payments (patient_id, consultation_id, payment_date, amount, payment_method, receipt_number) VALUES
-      (1, 1, '2024-07-20', 150.00, 'Credit Card', 'REC001'),
-      (2, 2, '2024-07-21', 80.00, 'Cash', 'REC002'),
-      (3, 3, '2024-07-22', 120.00, 'Insurance', 'REC003');
-    `;
+        -- Add sample payments
+        INSERT IGNORE INTO Payments (patient_id, consultation_id, payment_date, amount, payment_method, receipt_number) VALUES
+        (1, 1, '2024-07-20', 150.00, 'Credit Card', 'REC001'),
+        (2, 2, '2024-07-21', 80.00, 'Cash', 'REC002'),
+        (3, 3, '2024-07-22', 120.00, 'Insurance', 'REC003');
+      `;
 
     // Split SQL into individual statements
     const setupStatements = setupSQL.split(';').filter(stmt => stmt.trim());
