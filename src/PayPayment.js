@@ -10,7 +10,7 @@ function KPayPayment() {
     const payload = {
       phone: phoneNumber,
       amount: amount,
-      currency: "RWF", // or as required
+      currency: "RWF",
       description: "Consultation Payment"
     };
 
