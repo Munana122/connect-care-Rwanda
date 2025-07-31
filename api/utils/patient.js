@@ -38,11 +38,18 @@ const patientUtils = {
   // Update patient
   updatePatient: async (id, patientData) => {
     try {
-      const { full_name, date_of_birth, gender, contact_info, address, email, phone, password } = patientData;
-      const [result] = await pool.execute(
-        'UPDATE patients SET full_name = ?, date_of_birth = ?, gender = ?, contact_info = ?, address = ?, email = ?, phone = ?, password = ? WHERE id = ?',
-        [full_name, date_of_birth, gender, contact_info, address, email, phone, password, id]
-      );
+      const fields = Object.keys(patientData);
+      const values = Object.values(patientData);
+      
+      if (fields.length === 0) {
+        return true; // No fields to update
+      }
+
+      const setClause = fields.map(field => `${field} = ?`).join(', ');
+      const sql = `UPDATE patients SET ${setClause} WHERE id = ?`;
+      values.push(id);
+
+      const [result] = await pool.execute(sql, values);
       return result.affectedRows > 0;
     } catch (error) {
       throw new Error(`Error updating patient: ${error.message}`);
@@ -61,4 +68,3 @@ const patientUtils = {
 };
 
 module.exports = patientUtils;
-

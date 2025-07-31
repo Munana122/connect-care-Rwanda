@@ -1,4 +1,6 @@
 const pool = require('./db');
+const { sendSms } = require('./twilio');
+const { sendEmail } = require('./email');
 
 const consultationUtils = {
   // Get all consultations
@@ -65,11 +67,46 @@ const consultationUtils = {
   // Create consultation
   createConsultation: async (consultationData) => {
     try {
-      const { patient_id, doctor_id, consultation_date, notes, diagnosis, prescription } = consultationData;
+      const { patient_id, doctor_id, consultation_date, notes, diagnosis, prescription, status } = consultationData;
       const [result] = await pool.execute(
-        'INSERT INTO consultations (patient_id, doctor_id, consultation_date, notes, diagnosis, prescription) VALUES (?, ?, ?, ?, ?, ?)',
-        [patient_id, doctor_id, consultation_date, notes, diagnosis, prescription]
+        'INSERT INTO consultations (patient_id, doctor_id, consultation_date, notes, diagnosis, prescription, status) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        [patient_id, doctor_id, consultation_date, notes || null, diagnosis || null, prescription || null, status || 'scheduled']
       );
+
+      // Send notification
+      try {
+        const [[user]] = await pool.execute('SELECT full_name, phone, email FROM users WHERE id = ?', [patient_id]);
+        const [[doctor]] = await pool.execute('SELECT full_name FROM doctors WHERE id = ?', [doctor_id]);
+
+        if (user) {
+          const patientName = user.full_name;
+          const doctorName = doctor.full_name;
+
+          const smsMessage = `Hi ${patientName}. Your appointment with Dr. ${doctorName} on ${consultation_date} is confirmed. Connect Care Team.`;
+          
+          const emailHtml = `
+            <div style="font-family: sans-serif; text-align: center;">
+              <img src="cid:logo" alt="Connect Care Logo" style="width: 150px; margin-bottom: 20px;"/>
+              <h2>Appointment Confirmation</h2>
+              <p>Hi ${patientName},</p>
+              <p>Your appointment with <strong>Dr. ${doctorName}</strong> on <strong>${consultation_date}</strong> has been booked successfully.</p>
+              <p>Please contact us if you require any assistance.</p>
+              <br/>
+              <p>Thank you,</p>
+              <p><strong>The Connect Care Team</strong></p>
+            </div>
+          `;
+
+          if (user.phone) {
+            await sendSms(user.phone, smsMessage);
+          } else if (user.email) {
+            await sendEmail(user.email, 'Your Appointment is Confirmed', smsMessage, emailHtml);
+          }
+        }
+      } catch (notificationError) {
+        console.error(`Failed to send notification: ${notificationError.message}`);
+      }
+
       return result.insertId;
     } catch (error) {
       throw new Error(`Error creating consultation: ${error.message}`);
@@ -102,4 +139,3 @@ const consultationUtils = {
 };
 
 module.exports = consultationUtils;
-

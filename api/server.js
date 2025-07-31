@@ -1,6 +1,6 @@
 const express = require('express');
 const cors = require('cors');
-require('dotenv').config({ path: require('path').resolve(__dirname, '../.env') });
+require('dotenv').config();
 const auth = require('./utils/auth');
 const patientUtils = require('./utils/patient');
 const doctorUtils = require('./utils/doctor');
@@ -26,7 +26,7 @@ app.post('/auth/register', async (req, res) => {
     
     // Validate input
     if (!full_name || !email || !password) {
-      return res.status(400).json({ error: 'Missing required fields' });
+      return res.status(400).json({ error: 'Missing required fields: full_name, email, and password are required' });
     }
     
     if (!auth.isValidEmail(email)) {
@@ -37,7 +37,8 @@ app.post('/auth/register', async (req, res) => {
       return res.status(400).json({ error: 'Password must be at least 8 characters with uppercase, lowercase, and number' });
     }
     
-    if (phone && !auth.isValidPhone(phone)) {
+    // Validate phone if provided
+    if (phone && phone.trim() !== '' && !auth.isValidPhone(phone)) {
       return res.status(400).json({ error: 'Invalid phone format' });
     }
     
@@ -461,8 +462,8 @@ app.get('/setup-db', async (req, res) => {
         CREATE TABLE IF NOT EXISTS patients (
           id INT PRIMARY KEY AUTO_INCREMENT,
           full_name VARCHAR(200) NOT NULL,
-          date_of_birth DATE NOT NULL,
-          gender VARCHAR(15) NOT NULL,
+          date_of_birth DATE,
+          gender VARCHAR(15),
           contact_info VARCHAR(200),
           address TEXT,
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -573,23 +574,35 @@ app.get('/setup-db', async (req, res) => {
 app.get('/debug-tables', async (req, res) => {
   try {
     const pool = require('./utils/db');
+    const tablesToDebug = ['users', 'patients', 'doctors', 'consultations', 'Payments'];
+    const debugInfo = {};
+
+    for (const table of tablesToDebug) {
+      try {
+        const [columns] = await pool.execute(`DESCRIBE ${table}`);
+        const [createTable] = await pool.execute(`SHOW CREATE TABLE ${table}`);
+        debugInfo[table] = {
+          columns: columns,
+          create_statement: createTable[0]['Create Table']
+        };
+      } catch (tableError) {
+        debugInfo[table] = { error: tableError.message };
+      }
+    }
     
-    // Check if users table exists and its structure
-    const [tables] = await pool.execute("SHOW TABLES");
-    const [userColumns] = await pool.execute("DESCRIBE users");
-    
-    res.json({
-      tables: tables,
-      users_table_structure: userColumns
-    });
+    res.json(debugInfo);
+
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
 // AI Triage
-app.post('/triage', (req, res) => {
-  res.send('AI triage endpoint');
+app.post('/triage', async (req, res) => {
+    const { message } = req.body;
+    if (!message) {
+      return res.status(400).json({ error: 'Message is required' });
+    }
 });
 
 // Payment webhook
@@ -598,9 +611,8 @@ app.post('/payment/webhook', (req, res) => {
 });
 
 // Start server
-app.listen(PORT, () => {
+app.listen(PORT, '0.0.0.0', () => {
   console.log(`API running on port ${PORT}`);
 });
 
 module.exports = app;
-
